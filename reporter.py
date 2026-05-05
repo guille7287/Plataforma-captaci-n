@@ -4,10 +4,9 @@ Muestra todos los resultados (sin límite) y explica el scoring.
 """
 
 import os
-import smtplib
-import ssl
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import urllib.request
+import urllib.error
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -259,8 +258,10 @@ def enviar_whatsapp(oportunidades):
 def enviar_email(oportunidades, archivo_html):
     if not EMAIL.get("habilitado"):
         return
-    if not EMAIL.get("usuario") or not EMAIL.get("password"):
-        print("  [!] Email: falta EMAIL_USER o EMAIL_PASSWORD — configura las variables de entorno")
+
+    api_key = EMAIL.get("api_key", "")
+    if not api_key:
+        print("  [!] Email: falta RESEND_API_KEY — configura la variable de entorno en Railway")
         return
 
     destinatarios = [d for d in EMAIL.get("destinatarios", []) if d and "@" in d]
@@ -274,25 +275,31 @@ def enviar_email(oportunidades, archivo_html):
 
     html_body = Path(archivo_html).read_text(encoding="utf-8")
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = asunto
-    msg["From"]    = EMAIL["remitente"]
-    msg["To"]      = ", ".join(destinatarios)
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    payload = json.dumps({
+        "from":    EMAIL["remitente"],
+        "to":      destinatarios,
+        "subject": asunto,
+        "html":    html_body,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type":  "application/json",
+        },
+        method="POST",
+    )
 
     try:
-        context = ssl.create_default_context()
-        if EMAIL["smtp_port"] == 465:
-            with smtplib.SMTP_SSL(EMAIL["smtp_host"], EMAIL["smtp_port"], context=context) as server:
-                server.login(EMAIL["usuario"], EMAIL["password"])
-                server.sendmail(EMAIL["remitente"], destinatarios, msg.as_string())
-        else:
-            with smtplib.SMTP(EMAIL["smtp_host"], EMAIL["smtp_port"], timeout=30) as server:
-                server.ehlo()
-                server.starttls(context=context)
-                server.login(EMAIL["usuario"], EMAIL["password"])
-                server.sendmail(EMAIL["remitente"], destinatarios, msg.as_string())
-        print(f"  Email enviado a: {', '.join(destinatarios)}")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                print(f"  Email enviado a: {', '.join(destinatarios)}")
+            else:
+                print(f"  [!] Resend respondió HTTP {resp.status}")
+    except urllib.error.HTTPError as e:
+        print(f"  [!] Error Resend HTTP {e.code}: {e.read().decode()}")
     except Exception as e:
         print(f"  [!] Error enviando email: {e}")
 
