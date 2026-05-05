@@ -4,10 +4,14 @@ Muestra todos los resultados (sin límite) y explica el scoring.
 """
 
 import os
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from datetime import datetime
 from pathlib import Path
 
-from config import SCORING, NOTIFICACIONES
+from config import SCORING, NOTIFICACIONES, EMAIL
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
@@ -252,12 +256,54 @@ def enviar_whatsapp(oportunidades):
             print(f"  [!] Error WhatsApp {numero}: {e}")
 
 
+def enviar_email(oportunidades, archivo_html):
+    if not EMAIL.get("habilitado"):
+        return
+    if not EMAIL.get("usuario") or not EMAIL.get("password"):
+        print("  [!] Email: falta EMAIL_USER o EMAIL_PASSWORD — configura las variables de entorno")
+        return
+
+    destinatarios = [d for d in EMAIL.get("destinatarios", []) if d and "@" in d]
+    if not destinatarios:
+        print("  [!] Email: no hay destinatarios configurados en config.py → EMAIL['destinatarios']")
+        return
+
+    fecha = datetime.now().strftime("%d/%m/%Y")
+    n = len(oportunidades)
+    asunto = f"Captación Monteclaro — {n} anuncio{'s' if n != 1 else ''} · {fecha}"
+
+    html_body = Path(archivo_html).read_text(encoding="utf-8")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = asunto
+    msg["From"]    = EMAIL["remitente"]
+    msg["To"]      = ", ".join(destinatarios)
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    try:
+        context = ssl.create_default_context()
+        if EMAIL["smtp_port"] == 465:
+            with smtplib.SMTP_SSL(EMAIL["smtp_host"], EMAIL["smtp_port"], context=context) as server:
+                server.login(EMAIL["usuario"], EMAIL["password"])
+                server.sendmail(EMAIL["remitente"], destinatarios, msg.as_string())
+        else:
+            with smtplib.SMTP(EMAIL["smtp_host"], EMAIL["smtp_port"], timeout=30) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.login(EMAIL["usuario"], EMAIL["password"])
+                server.sendmail(EMAIL["remitente"], destinatarios, msg.as_string())
+        print(f"  Email enviado a: {', '.join(destinatarios)}")
+    except Exception as e:
+        print(f"  [!] Error enviando email: {e}")
+
+
 def run(oportunidades):
     print(f"\n{'='*60}")
     print(f"  GENERANDO INFORME")
     print(f"{'='*60}")
     archivo = generar_html(oportunidades)
     enviar_whatsapp(oportunidades)
+    enviar_email(oportunidades, archivo)
 
     # Solo abre el navegador si estamos en Mac (no en Railway/Linux servidor)
     import platform

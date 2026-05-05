@@ -63,6 +63,31 @@ NOTIFICACIONES = {
 }
 
 # ---------------------------------------------------------------------------
+# CORREO ELECTRÓNICO
+# Credenciales configuradas como variables de entorno en Railway:
+#   EMAIL_SMTP_HOST   → servidor SMTP  (p.ej. smtp.gmail.com)
+#   EMAIL_SMTP_PORT   → puerto         (587 para TLS, 465 para SSL)
+#   EMAIL_USER        → cuenta de envío (p.ej. tucuenta@gmail.com)
+#   EMAIL_PASSWORD    → contraseña o App Password de Gmail
+#
+# Para Gmail: activa "Verificación en dos pasos" y genera una
+# "Contraseña de aplicación" en myaccount.google.com/apppasswords
+# ---------------------------------------------------------------------------
+
+EMAIL = {
+    "habilitado":   True,
+    "smtp_host":    os.getenv("EMAIL_SMTP_HOST", "smtp.gmail.com"),
+    "smtp_port":    int(os.getenv("EMAIL_SMTP_PORT", "587")),
+    "usuario":      os.getenv("EMAIL_USER", ""),
+    "password":     os.getenv("EMAIL_PASSWORD", ""),
+    "remitente":    os.getenv("EMAIL_USER", ""),   # mismo que usuario por defecto
+    "destinatarios": [
+        "guille7287@gmail.com",
+        "javierfalferez@gmail.com",
+    ],
+}
+
+# ---------------------------------------------------------------------------
 # ZENROWS — API key como variable de entorno en Railway: ZENROWS_API_KEY
 # ---------------------------------------------------------------------------
 
